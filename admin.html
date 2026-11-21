@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hub Burger - لوحة الطلبات</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#111;color:#f5f5f5;font-family:Arial,sans-serif}
+header{padding:20px;background:#191919;border-bottom:2px solid #c89b35;text-align:center}
+h1{margin:0;color:#d5aa46}main{max-width:1000px;margin:24px auto;padding:16px}
+.panel{background:#202020;border:1px solid #444;border-radius:12px;padding:20px;margin-bottom:18px}
+input,button,select{font:inherit;padding:12px;border-radius:8px;border:1px solid #555;margin:5px;background:#151515;color:white}
+button{background:#c89b35;color:#111;font-weight:bold;cursor:pointer;border:none}
+.order{border:1px solid #444;border-radius:10px;padding:16px;margin:12px 0;background:#191919}
+.order h3{color:#d5aa46;margin-top:0}.muted{color:#aaa}.hidden{display:none}
+#message{color:#ffb9b9}
+</style>
+</head>
+<body>
+<header><h1>Hub Burger</h1><div>لوحة إدارة الطلبات</div></header>
+<main>
+<section class="panel" id="login">
+<h2>تسجيل دخول الإدارة</h2>
+<input id="email" type="email" placeholder="البريد الإلكتروني" autocomplete="username">
+<input id="password" type="password" placeholder="كلمة المرور" autocomplete="current-password">
+<button id="loginBtn">دخول</button><p id="message"></p>
+</section>
+<section class="panel hidden" id="dashboard">
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap"><h2>الطلبات</h2><button id="logoutBtn">تسجيل خروج</button></div>
+<div id="orders"><p class="muted">تحميل الطلبات...</p></div>
+</section>
+</main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
+import {getDatabase,ref,onValue,update} from "https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js";
+
+// ضع إعدادات Firebase الخاصة بمشروعك هنا
+const firebaseConfig = {
+  apiKey: "AIzaSyDeLrhzDo_a9f9JVVq0SwYjXmKxROFFP98",
+  authDomain: "hub-burger-605d3.firebaseapp.com",
+  databaseURL: "https://hub-burger-605d3-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "hub-burger-605d3",
+  storageBucket: "hub-burger-605d3.firebasestorage.app",
+  messagingSenderId: "388083054273",
+  appId: "1:388083054273:web:6fec4d66347dc3c9e2c640",
+  measurementId: "G-31M183Y1XL"
+};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getDatabase(app);
+const login=document.getElementById("login"),dashboard=document.getElementById("dashboard"),message=document.getElementById("message"),ordersEl=document.getElementById("orders");
+document.getElementById("loginBtn").onclick=async()=>{
+ message.textContent="";
+ try{await signInWithEmailAndPassword(auth,email.value.trim(),password.value)}
+ catch(e){message.textContent="خطأ: "+e.code+" - "+e.message}
+};
+document.getElementById("logoutBtn").onclick=()=>signOut(auth);
+onAuthStateChanged(auth,user=>{
+ login.classList.toggle("hidden",!!user);dashboard.classList.toggle("hidden",!user);
+ if(user){listenOrders()}else{ordersEl.innerHTML=""}
+});
+function listenOrders(){
+ onValue(ref(db,"orders"),snapshot=>{
+ const data=snapshot.val();ordersEl.innerHTML="";
+ if(!data){ordersEl.innerHTML="<p>لا توجد طلبات حالياً</p>";return}
+ Object.entries(data).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)).forEach(([id,o])=>{
+ const card=document.createElement("div");card.className="order";
+ const title=document.createElement("h3");title.textContent="طلب #"+(o.id||id);card.append(title);
+ const details=document.createElement("div");
+ details.innerText="الاسم: "+(o.name||o.customerName||"غير متوفر")+"\nالهاتف: "+(o.phone||"غير متوفر")+"\nالعنوان: "+(o.address||"غير متوفر")+"\n\nالطلب: "+formatItems(o.items)+"\n\nملاحظات: "+(o.notes||"لا يوجد");
+ card.append(details);
+ const status=document.createElement("p");status.innerText="الحالة الحالية: "+(o.status||"new");card.append(status);
+ const select=document.createElement("select");
+ [["new","جديد"],["preparing","قيد التحضير"],["ready","جاهز"],["completed","مكتمل"],["cancelled","ملغي"]].forEach(([v,t])=>{const op=document.createElement("option");op.value=v;op.textContent=t;select.append(op)});
+ select.value=o.status||"new";card.append(select);
+ const btn=document.createElement("button");btn.textContent="حفظ الحالة";btn.onclick=async()=>{try{await update(ref(db,"orders/"+id),{status:select.value});btn.textContent="تم الحفظ";setTimeout(()=>btn.textContent="حفظ الحالة",1500)}catch(e){alert("تعذّر الحفظ. تحقق من صلاحيات قاعدة البيانات.")}};card.append(btn);
+ ordersEl.append(card);
+ });
+ },err=>{ordersEl.innerHTML="<p>لا يمكن قراءة الطلبات. راجع صلاحيات قاعدة البيانات.</p>"});
+}
+function formatItems(items){
+ if(!items)return"غير متوفر";
+ if(Array.isArray(items))return items.map(x=>typeof x==="string"?x:JSON.stringify(x)).join("\n");
+ if(typeof items==="object")return Object.entries(items).map(([k,v])=>k+": "+(typeof v==="object"?JSON.stringify(v):v)).join("\n");
+ return String(items);
+}
+</script>
+</body>
+</html>
