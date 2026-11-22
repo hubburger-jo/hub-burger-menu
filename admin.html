@@ -79,8 +79,16 @@ function listenOrders(){
 }
 function formatItems(items){
  if(!items)return"غير متوفر";
- if(Array.isArray(items))return items.map(x=>typeof x==="string"?x:JSON.stringify(x)).join("\n");
- if(typeof items==="object")return Object.entries(items).map(([k,v])=>k+": "+(typeof v==="object"?JSON.stringify(v):v)).join("\n");
+ const fmt=x=>{
+  if(typeof x==="string")return x;
+  if(!x||typeof x!=="object")return String(x);
+  const name=x.name||x.n||"صنف";
+  const qty=x.q||x.quantity||1;
+  const price=x.p??x.price;
+  return name+" × "+qty+(price!=null?" — "+(Number(price)*qty).toFixed(2)+" د.أ":"");
+ };
+ if(Array.isArray(items))return items.map(fmt).join("\n");
+ if(typeof items==="object")return Object.values(items).map(fmt).join("\n");
  return String(items);
 }
 </script>
