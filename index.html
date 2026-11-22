@@ -577,7 +577,6 @@ async function kSync(){
 function kCard(o,fresh){
   const items=o.items.map(l=>`<li>${l.q}× ${esc(l.name)}</li>`).join('');
   let h=`<div class="ko ${fresh?'fresh2':''}"><div class="h"><span class="num en">#${esc(o.num)}</span><span class="meta">${esc(typeText(o))}</span></div><div class="nm">👤 ${esc(o.name||'—')}</div>`;
-  }
   if(o.mode==='delivery'){h+=`<div class="meta">📍 ${esc(o.addr)}${o.loc?` · <a style="color:#ffb54d" target="_blank" rel="noopener" href="${esc(o.loc)}">الموقع على الخريطة</a>`:''}</div>`}
   h+=`<ul>${items}</ul>`;
   if(o.note)h+=`<div class="meta">📝 ${esc(o.note)}</div>`;
