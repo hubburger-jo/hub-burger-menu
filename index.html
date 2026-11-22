@@ -344,11 +344,8 @@ $('#ringOk').onclick=stopRing;
 
 /* ---- السلة ---- */
 let cart=store.get('hub_cart',[]),ecart=[],editing=null,view=null;
-let form=Object.assign({type:null,table:'',name:'',phone:'',note:'',mode:'pickup',when:0,addr:'',loc:''},store.get('hub_profile',{}));
-const hhmm=ts=>new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+let form=Object.assign({type:null,table:'',name:'',phone:'',note:'',mode:'pickup',addr:'',loc:''},store.get('hub_profile',{}));
 const typeText=o=>o.type==='in'?'🍽️ بالمحل'+(o.table?' · طاولة '+o.table:''):(o.mode==='delivery'?'🚚 توصيل':'🏃 استلام');
-const whenText=o=>o.type==='out'?(o.when?`بعد ${o.when} د (الساعة ${hhmm(o.wantAt)})`:'بأسرع وقت'):'';
-const WHENS=[[0,'بأسرع وقت'],[15,'بعد 15 د'],[30,'بعد 30 د'],[45,'بعد 45 د'],[60,'بعد ساعة']];
 let me=store.get('hub_my_order',null),myOrder=store.get('hub_my_order_obj',null);
 if(myOrder&&myOrder.status==='done'){me=null;myOrder=null;store.del('hub_my_order');store.del('hub_my_order_obj')}
 const lines=()=>editing?ecart:cart;
@@ -438,7 +435,6 @@ function orderHTML(){
   const p=phase(o);
   let h=`<div class="shh"><h3>طلبك</h3><button class="x" data-act="close" aria-label="إغلاق">✕</button></div>
    <div><span class="bignum">#${esc(o.num)}</span> <span class="badge">${esc(typeText(o))}</span></div>
-   ${o.type==='out'?`<p class="hint" style="margin:4px 0">🕒 ${esc(whenText(o))}${o.mode==='delivery'?' · 📍 '+esc(o.addr):''}</p>`:''}
    <p class="statusbox live" id="liveLine">${liveLine(o)}</p>`;
   o.items.forEach(l=>{const im=IMG[l.n]||'';h+=`<div class="ln" style="grid-template-columns:66px 1fr 64px">${im?`<img class="thumb" src="${im}" alt="">`:''}<div class="lt">${l.q}× ${esc(l.name)}</div><div class="lp en">${money(l.p*l.q)}</div></div>`});
   if(o.note)h+=`<p class="hint">ملاحظة: ${esc(o.note)}</p>`;
@@ -452,7 +448,6 @@ function orderHTML(){
 /* ---- واتساب ---- */
 function msgOf(o,tag){
   const L=[`*${tag||'طلب جديد'} #${o.num}* — هب برجر`,typeText(o)];
-  if(o.type==='out')L.push('🕒 '+whenText(o));
   if(o.mode==='delivery'){L.push('العنوان: '+o.addr);if(o.loc)L.push('الموقع: '+o.loc)}
   if(o.name)L.push('الاسم: '+o.name);if(o.phone)L.push('الجوال: '+o.phone);
   L.push('',...o.items.map(l=>`${l.q}× ${l.name} — ${money(l.q*l.p)}`),'','المجموع: '+money(o.total)+' JD');
@@ -479,9 +474,8 @@ async function submit(){
   store.set('hub_profile',{name:form.name,phone:form.phone,addr:form.addr});
   const L=lines().map(l=>({...l})),now=Date.now(),out=form.type==='out',dl=out&&form.mode==='delivery';
   const base={items:L,total:total(L),type:form.type,table:form.type==='in'?form.table.trim():'',name:out?'':form.name.trim(),phone:form.phone.trim(),note:form.note.trim(),
-    mode:out?form.mode:'',when:0,wantAt:null,addr:dl?form.addr.trim():'',loc:dl?form.loc:''};
+    mode:out?form.mode:'',addr:dl?form.addr.trim():'',loc:dl?form.loc:''};
   const btn=$('#shBody [data-act="submit"]');btn.disabled=true;
-  alert(JSON.stringify(L));
   try{
     if(editing){
       const cur=(await DB.get(editing))||myOrder;
@@ -536,13 +530,12 @@ document.addEventListener('click',ev=>{
   else if(a==='dec'){const L=lines();if(--L[i].q<=0)L.splice(i,1);if(!editing)saveCart();renderSheet();drawDock()}
   else if(a==='type'){form.type=t.dataset.v;renderSheet()}
   else if(a==='mode'){form.mode=t.dataset.v;renderSheet()}
-  else if(a==='when'){form.when=+t.dataset.v;renderSheet()}
   else if(a==='loc'){
     if(!navigator.geolocation){toast('المتصفح ما بيدعم تحديد الموقع، اكتب العنوان');return}
     navigator.geolocation.getCurrentPosition(p=>{form.loc=`https://maps.google.com/?q=${p.coords.latitude},${p.coords.longitude}`;renderSheet()},()=>toast('ما قدرنا نحدد موقعك، اكتب العنوان'),{timeout:8000,maximumAge:60000});
   }
   else if(a==='submit')submit();
-  else if(a==='edit'){editing=myOrder.id;ecart=myOrder.items.map(l=>({...l}));form={type:myOrder.type,table:myOrder.table||'',name:myOrder.name||'',phone:myOrder.phone||'',note:myOrder.note||'',mode:myOrder.mode||'pickup',when:myOrder.when||0,addr:myOrder.addr||'',loc:myOrder.loc||''};openSheet('cart')}
+  else if(a==='edit'){editing=myOrder.id;ecart=myOrder.items.map(l=>({...l}));form={type:myOrder.type,table:myOrder.table||'',name:myOrder.name||'',phone:myOrder.phone||'',note:myOrder.note||'',mode:myOrder.mode||'pickup',addr:myOrder.addr||'',loc:myOrder.loc||''};openSheet('cart')}
   else if(a==='cancel')cancelOrder();
   else if(a==='clear')clearOrder();
 });
@@ -584,8 +577,6 @@ async function kSync(){
 function kCard(o,fresh){
   const items=o.items.map(l=>`<li>${l.q}× ${esc(l.name)}</li>`).join('');
   let h=`<div class="ko ${fresh?'fresh2':''}"><div class="h"><span class="num en">#${esc(o.num)}</span><span class="meta">${esc(typeText(o))}</span></div><div class="nm">👤 ${esc(o.name||'—')}</div>`;
-  if(o.type==='out'&&['new','preparing'].includes(o.status)){
-    h+=o.wantAt?`<div class="tm wait" data-kind="want" data-end="${o.wantAt}"></div>`:`<div class="tm wait">🕒 بأسرع وقت</div>`;
   }
   if(o.mode==='delivery'){h+=`<div class="meta">📍 ${esc(o.addr)}${o.loc?` · <a style="color:#ffb54d" target="_blank" rel="noopener" href="${esc(o.loc)}">الموقع على الخريطة</a>`:''}</div>`}
   h+=`<ul>${items}</ul>`;
@@ -604,7 +595,6 @@ function kCard(o,fresh){
     h+=`<div class="tm ok" style="font-size:22px">${rl}</div><div class="krow"><button class="kb go" data-act="done" data-id="${id}">تم التسليم</button>${w}</div>`;
   }
   return h+'</div>';
-}
 function kDraw(fresh=[]){
   const L=Object.values(kOrders).sort((a,b)=>a.createdAt-b.createdAt);
   const col=(st,cls,title)=>{const xs=L.filter(o=>o.status===st);return`<div class="kcol ${cls}"><h3><span>${title}</span><span>${xs.length}</span></h3>${xs.map(o=>kCard(o,fresh.includes(o.id))).join('')||'<p class="meta" style="color:#6b645c">لا يوجد</p>'}</div>`};
@@ -616,7 +606,6 @@ function kTick(){
   document.querySelectorAll('#kitchen [data-end]').forEach(e=>{
     const left=+e.dataset.end-Date.now();
     if(e.dataset.kind==='edit'){e.className='tm '+(left>0?'wait':'ok');e.textContent=left>0?`⏳ لسا ممكن يعدّل: ${mmss(left)}`:'✓ انتهت مهلة التعديل، جاهز للتحضير'}
-    else if(e.dataset.kind==='want'){e.className='tm '+(left>0?'wait':'ok');e.textContent=left>0?`🕒 بده الطلب الساعة ${hhmm(+e.dataset.end)} · باقي ${mmss(left)}`:'🕒 حان موعد الطلب'}
     else{e.className='tm '+(left>0?'':'ok');e.textContent=left>0?`⏱ ضايل ${mmss(left)}`:'⏱ انتهى الوقت المقدّر'}
   });
 }
