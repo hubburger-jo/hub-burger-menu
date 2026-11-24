@@ -13,7 +13,7 @@ input,button,select{font:inherit;padding:12px;border-radius:8px;border:1px solid
 button{background:#c89b35;color:#111;font-weight:bold;cursor:pointer;border:none}
 .order{border:1px solid #444;border-radius:10px;padding:16px;margin:12px 0;background:#191919}
 .order h3{color:#d5aa46;margin-top:0}.muted{color:#aaa}.hidden{display:none}
-#message{color:#ffb9b9}
+#message{color:#ffb9b9}.order-details{white-space:pre-line;line-height:1.8}.items{display:grid;gap:10px;margin:14px 0}.item{display:flex;align-items:center;gap:12px;padding:10px;background:#252525;border-radius:8px}.item-img{width:84px;height:84px;object-fit:cover;border-radius:8px;background:#333}.item-info{display:grid;gap:8px}.total{font-weight:bold;color:#d5aa46;font-size:18px;margin:12px 0}
 </style>
 </head>
 <body>
@@ -58,6 +58,10 @@ onAuthStateChanged(auth,user=>{
  login.classList.toggle("hidden",!!user);dashboard.classList.toggle("hidden",!user);
  if(user){listenOrders()}else{ordersEl.innerHTML=""}
 });
+async function loadImages(){
+ try{const response=await fetch('./index.html');if(!response.ok)return {};const source=await response.text();const match=source.match(/const IMG=(\{[\s\S]*?\});/);if(!match)return {};return JSON.parse(match[1]);}catch(e){console.warn('تعذر تحميل صور الأصناف',e);return {}}
+}
+let productImages={};loadImages().then(x=>productImages=x);
 function listenOrders(){
  onValue(ref(db,"orders"),snapshot=>{
  const data=snapshot.val();ordersEl.innerHTML="";
@@ -65,9 +69,17 @@ function listenOrders(){
  Object.entries(data).sort((a,b)=>(b[1].createdAt||0)-(a[1].createdAt||0)).forEach(([id,o])=>{
  const card=document.createElement("div");card.className="order";
  const title=document.createElement("h3");title.textContent="طلب #"+(o.id||id);card.append(title);
- const details=document.createElement("div");
- details.innerText="الاسم: "+(o.name||o.customerName||"غير متوفر")+"\nالهاتف: "+(o.phone||"غير متوفر")+"\nالعنوان: "+(o.address||"غير متوفر")+"\n\nالطلب: "+formatItems(o.items)+"\n\nملاحظات: "+(o.notes||"لا يوجد");
- card.append(details);
+ const details=document.createElement("p");details.className="order-details";
+ details.innerText="الاسم: "+(o.name||o.customerName||"غير متوفر")+"\nالهاتف: "+(o.phone||"غير متوفر")+"\nنوع الطلب: "+(o.type||o.mode||"غير متوفر")+"\nالعنوان: "+(o.addr||o.address||"غير متوفر")+"\nملاحظات: "+(o.note||o.notes||"لا يوجد");card.append(details);
+ const itemWrap=document.createElement('div');itemWrap.className='items';
+ const lines=Array.isArray(o.items)?o.items:Object.values(o.items||{});let sum=0;
+ lines.forEach(x=>{const qty=Number(x.q||x.quantity||1),price=Number(x.p??x.price??0);sum+=qty*price;
+ const row=document.createElement('div');row.className='item';
+ const img=document.createElement('img');img.className='item-img';img.alt='';img.src=productImages[String(x.n||x.id||'')]||'';if(!img.src)img.style.display='none';row.append(img);
+ const info=document.createElement('div');info.className='item-info';const nm=document.createElement('strong');nm.textContent=x.name||x.t||x.n||'صنف';info.append(nm);
+ const meta=document.createElement('div');meta.className='muted';meta.textContent='الكمية: '+qty+' | سعر الوحدة: '+price.toFixed(2)+' د.أ | المجموع: '+(qty*price).toFixed(2)+' د.أ';info.append(meta);row.append(info);itemWrap.append(row);
+ });card.append(itemWrap);
+ const total=document.createElement('div');total.className='total';total.textContent='المجموع الكلي: '+Number(o.total??sum).toFixed(2)+' د.أ';card.append(total);
  const status=document.createElement("p");status.innerText="الحالة الحالية: "+(o.status||"new");card.append(status);
  const select=document.createElement("select");
  [["new","جديد"],["preparing","قيد التحضير"],["ready","جاهز"],["completed","مكتمل"],["cancelled","ملغي"]].forEach(([v,t])=>{const op=document.createElement("option");op.value=v;op.textContent=t;select.append(op)});
@@ -77,6 +89,7 @@ function listenOrders(){
  });
  },err=>{ordersEl.innerHTML="<p>لا يمكن قراءة الطلبات. راجع صلاحيات قاعدة البيانات.</p>"});
 }
+
 function formatItems(items){
  if(!items)return"غير متوفر";
  const fmt=x=>{
