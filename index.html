@@ -515,7 +515,14 @@ function clearOrder(){me=null;myOrder=null;store.del('hub_my_order');store.del('
 async function sync(){
   if(!me)return;
   try{
-    const o=await DB.get(me);if(!o)return;
+    const o=await DB.get(me);
+    // If the saved order ID no longer exists in Firebase, clear stale local tracking.
+    if(!o){
+      me=null;myOrder=null;editing=null;lastPhase=null;
+      store.del('hub_my_order');store.del('hub_my_order_obj');store.del('hub_rung');
+      drawDock();if(view==='order')closeSheet();
+      return;
+    }
     const prev=myOrder&&myOrder.status;myOrder=o;store.set('hub_my_order_obj',o);
     if(o.status==='ready'&&store.get('hub_rung','')!==o.id){store.set('hub_rung',o.id);ring(o)}
     if(prev!==o.status)tickLive();else if(view==='order'&&!document.activeElement.closest('#shBody'))renderSheet();
